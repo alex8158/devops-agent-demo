@@ -1,1 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DevOps Agent demo stack - Lambda error + CloudWatch alarm
 
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: devops-agent-demo-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  DemoLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: devops-agent-demo-lambda
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import json
+          from datetime import datetime
+
+          def lambda_handler(event, context):
+              print(f"Demo Lambda invoked at {datetime.utcnow().isoformat()}Z")
+              print(json.dumps(event))
+              raise Exception("Intentional demo error for DevOps Agent investigation")
+
+  DemoLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: devops-agent-demo-lambda-errors
+      AlarmDescription: Demo alarm for DevOps Agent
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DemoLambda
+
+Outputs:
+  StackName:
+    Value: !Ref AWS::StackName
+  LambdaFunctionName:
+    Value: !Ref DemoLambda
+  LambdaFunctionArn:
+    Value: !GetAtt DemoLambda.Arn
+  AlarmName:
+    Value: !Ref DemoLambdaErrorAlarm
